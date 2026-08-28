@@ -25,7 +25,7 @@ const toolDeclarations = [
     },
     {
         name: "recommend_accessories",
-        description: "Find accessories for a product ID.",
+        description: "Find catalog accessories explicitly compatible with a product. Use ONLY when the customer asks for accessories, asks what goes with a product, or an accessory recommendation is clearly relevant to the shopping intent. Do NOT call this tool for a simple product search, product listing, or category search.",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -101,4 +101,3 @@ const toolDeclarations = [
 module.exports = {
     toolDeclarations
 };
-        

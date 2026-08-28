@@ -106,16 +106,35 @@ async function executeTool(call, sessionId) {
                 return { in_stock: p.availability === 'in_stock' && p.stock > 0, stock_count: p.stock };
             }
             case 'recommend_accessories': {
-                analyticsService.recordRecommendation();
+                console.log(`[ACCESSORY TOOL] Called for product: ${args.product_id}`);
+
+                const baseProduct = catalogService.getProductById(args.product_id);
+
+                if (!baseProduct) {
+                    return {
+                        error: "Product not found"
+                    };
+                }
+
                 const accessories = catalogService.getAccessories([args.product_id]);
-                return { recommendations: accessories };
+
+                console.log(
+                    `[ACCESSORY TOOL] Returning:`,
+                    accessories.map(a => `${a.id} - ${a.name}`)
+                );
+
+                analyticsService.recordRecommendation();
+
+                return {
+                    recommendations: accessories
+                };
             }
             case 'initiate_checkout': {
                 const p = catalogService.getProductById(args.product_id);
                 if (!p) return { error: "Product not found" };
-                
+
                 const requestedQuantity = args.quantity || 1;
-                
+
                 if (p.stock <= 0) return { error: "Product is out of stock" };
 
                 if (requestedQuantity > p.stock) {
@@ -149,7 +168,7 @@ async function executeTool(call, sessionId) {
                     customerName: null,
                     customerEmail: null
                 };
-                
+
                 console.log(`[CHECKOUT] Checkout initiated for session ${sessionId}, product ${args.product_id}, qty ${requestedQuantity}`);
                 console.log(`[CHECKOUT] Awaiting customer details`);
                 return {
@@ -234,13 +253,13 @@ async function executeTool(call, sessionId) {
                     }
 
                     totalAmount += (item.agreed_price * item.quantity);
-                    
+
                     descriptionParts.push(`${item.quantity}x ${product.name}`);
 
                     if (product.category === 'Accessories') {
                         upsellAmount += (item.agreed_price * item.quantity);
                     }
-                    
+
                     // Final Safety Guard
                     if (product.stock < item.quantity) {
                         return {
@@ -290,7 +309,7 @@ async function executeTool(call, sessionId) {
                     console.log(`[PAYMENT] Existing link ID: ${existingOrder.paymentLinkId}`);
                     console.log(`[PAYMENT] Existing link amount: ₹${existingOrder.totalAmount}`);
                     console.log(`[PAYMENT] Existing link belongs to session: ${sessionId}`);
-                    
+
                     // Check idempotency (same items, same amount)
                     if (existingOrder.totalAmount === totalAmount) {
                         const existingItemsHash = JSON.stringify(existingOrder.items);
@@ -310,7 +329,7 @@ async function executeTool(call, sessionId) {
                     console.log(`[PAYMENT] Verifying Razorpay payment link status before cancellation`);
                     try {
                         const rzpLink = await razorpay.paymentLink.fetch(existingOrder.paymentLinkId);
-                        
+
                         if (rzpLink.status === 'paid' || rzpLink.status === 'partially_paid') {
                             console.log(`[PAYMENT] Existing payment link status: ${rzpLink.status}`);
                             console.log(`[PAYMENT] Discount request rejected because payment is already completed`);
@@ -328,7 +347,7 @@ async function executeTool(call, sessionId) {
                         } else if (rzpLink.status === 'expired' || rzpLink.status === 'cancelled') {
                             console.log(`[PAYMENT] Old payment link is already ${rzpLink.status}`);
                         }
-                        
+
                         orderService.updateOrder(existingOrder.id, { status: 'SUPERSEDED' });
                     } catch (cancelErr) {
                         console.log(`[PAYMENT] Failed to cancel superseded payment link:`, cancelErr.message);
@@ -447,7 +466,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
     // --- POST-PAYMENT DISCOUNT FAST-PATH ---
     const lowerMsg = message.toLowerCase();
     const isDiscountIntent = lowerMsg.includes("discount") || lowerMsg.includes("lower price") || lowerMsg.includes("cheaper");
-    
+
     if (isDiscountIntent) {
         const latestOrder = orderService.getLatestOrderBySessionId(sessionId);
         if (latestOrder) {
@@ -457,10 +476,10 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
                     console.log(`[PAYMENT] Existing payment link status: ${rzpLink.status}`);
                     console.log(`[PAYMENT] Discount request rejected because payment is already completed`);
                     console.log(`[PAYMENT] No replacement payment link generated`);
-                    
+
                     const deterministicResponse = "I’m sorry, but since your payment has already gone through, I can’t change the price or apply another discount to this order.";
                     activeSessions[sessionId].push({ role: "model", parts: [{ text: deterministicResponse }] });
-                    
+
                     return { responseText: deterministicResponse, paymentLink: null };
                 }
             } catch (e) {
@@ -482,9 +501,9 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
         // Determine tool availability based on checkout state
         const purchaseIntentConfirmed = checkoutStates[sessionId]?.purchaseIntentConfirmed === true;
         const customerDetailsReceived = checkoutStates[sessionId]?.customerDetailsReceived === true;
-        
+
         let availableTools = toolDeclarations;
-        
+
         if (!purchaseIntentConfirmed) {
             console.log("[GEMINI ROUTER] Pre-checkout tools: search_products, check_stock, recommend_accessories, record_context_recommendation, get_product, initiate_checkout");
             if (global.metrics) global.metrics.preCheckoutToolSetCalls = (global.metrics.preCheckoutToolSetCalls || 0) + 1;
@@ -503,7 +522,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
                 // Deep clone to prevent mutating activeSessions
                 const partsCopy = JSON.parse(JSON.stringify(message.parts));
                 let optimized = false;
-                
+
                 partsCopy.forEach(part => {
                     const funcRes = part.functionResponse;
                     if (funcRes && funcRes.name === 'search_products' && funcRes.response && Array.isArray(funcRes.response.results)) {
@@ -521,7 +540,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
                     if (global.metrics) global.metrics.historical_payloads_truncated = (global.metrics.historical_payloads_truncated || 0) + 1;
                     console.log("[GEMINI OPTIMIZATION] Truncated historical search_products payload for token savings");
                 }
-                
+
                 return { role: message.role, parts: partsCopy };
             }
             return message;
@@ -542,14 +561,14 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
                 JSON.stringify(response.functionCalls, null, 2)
             );
             console.log(`[GEMINI API] Tools called: ${response.functionCalls.length}`);
-            
+
             let onlyDiscoveryTools = true;
             const discoveryToolNames = ['search_products', 'get_product', 'check_stock', 'recommend_accessories', 'record_context_recommendation'];
-            
+
             const toolResponses = [];
             for (const call of response.functionCalls) {
                 if (global.metrics) global.metrics.tool_calls++;
-                
+
                 if (!discoveryToolNames.includes(call.name)) {
                     onlyDiscoveryTools = false;
                 }
@@ -571,20 +590,20 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
                     result = toolCache.get(cacheKey);
                 } else {
                     result = await executeTool(call, sessionId);
-                    
+
                     if (result && result.status === 'rejected' && result.reason === 'PAYMENT_ALREADY_COMPLETED') {
                         console.log("[PAYMENT] PAYMENT_ALREADY_COMPLETED intercepted in runMerchantAgent. Terminating loop.");
-                        
+
                         const syntheticModelParts = [{ functionCall: { name: call.name, args: call.args } }];
                         activeSessions[sessionId].push({ role: "model", parts: syntheticModelParts });
                         activeSessions[sessionId].push({ role: "user", parts: [{ functionResponse: { name: call.name, response: result } }] });
                         activeSessions[sessionId].push({ role: "model", parts: [{ text: result.message }] });
-                        
+
                         return { responseText: result.message, paymentLink: null };
                     }
-                    
+
                     toolCache.set(cacheKey, result);
-                    
+
                     if (call.name === 'search_products' && result.results && result.results.length > 0) {
                         hasSuccessfulSearch = true;
                     }
@@ -609,16 +628,16 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
             const modelParts = response.candidates[0].content.parts;
             activeSessions[sessionId].push({ role: "model", parts: modelParts });
             activeSessions[sessionId].push({ role: "user", parts: toolResponses });
-            
+
             const lowerMessage = message.toLowerCase();
             const isDiscoveryFastPath = (
-                lowerMessage.includes("find me") || lowerMessage.includes("show me") || 
-                lowerMessage.includes("looking for") || lowerMessage.includes("recommend") || 
-                lowerMessage.includes("best") || lowerMessage.includes("options") || 
+                lowerMessage.includes("find me") || lowerMessage.includes("show me") ||
+                lowerMessage.includes("looking for") || lowerMessage.includes("recommend") ||
+                lowerMessage.includes("best") || lowerMessage.includes("options") ||
                 lowerMessage.includes("what") || lowerMessage.includes("i want to see") || lowerMessage.includes("search")
             ) && !(
-                lowerMessage.includes("buy") || lowerMessage.includes("purchase") || 
-                lowerMessage.includes("checkout") || lowerMessage.includes("order") || 
+                lowerMessage.includes("buy") || lowerMessage.includes("purchase") ||
+                lowerMessage.includes("checkout") || lowerMessage.includes("order") ||
                 lowerMessage.includes("generate payment link") || lowerMessage.includes("stock") || lowerMessage.includes("discount") || lowerMessage.includes("offer")
             );
 
@@ -647,7 +666,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
 
             // Intercept hallucinated success: if the agent claims to have generated a link but didn't actually generate one
             const lowerText = responseText.toLowerCase();
-            const hallucinatedLink = 
+            const hallucinatedLink =
                 lowerText.includes('here is your payment link') ||
                 lowerText.includes('here is the payment link') ||
                 lowerText.includes('payment link is ready') ||
@@ -666,7 +685,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
     if (!responseText && functionCallsHandled >= 3) {
         console.log("[GEMINI API] Model: gemini-3.1-flash-lite | Purpose: Final Discovery Response");
         if (global.metrics) global.metrics.gemini_3_1_flash_lite_calls++;
-        
+
         const finalResponse = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite',
             contents: activeSessions[sessionId],
@@ -681,14 +700,14 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
             const textParts = finalResponse.candidates[0].content.parts.filter(p => p.text).map(p => p.text);
             if (textParts.length > 0) extractedText = textParts.join("\n");
         }
-        
+
         try {
             responseText = extractedText || finalResponse.text;
         } catch (e) {
             responseText = extractedText;
         }
         responseText = responseText || "I found some information, but encountered an error displaying it.";
-        
+
         console.log("[AURA] Discovery response returned");
     }
 
