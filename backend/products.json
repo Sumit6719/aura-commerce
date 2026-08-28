@@ -1,0 +1,37 @@
+[
+  {
+    "id": "prod_1",
+    "name": "Aura Smart Watch",
+    "description": "Next-gen smart watch with advanced health tracking and 7-day battery life.",
+    "price_inr": 4999,
+    "tags": ["electronics", "wearable", "watch"]
+  },
+  {
+    "id": "prod_2",
+    "name": "Aura Wireless Earbuds",
+    "description": "Active noise-cancelling wireless earbuds with deep bass.",
+    "price_inr": 2999,
+    "tags": ["electronics", "audio", "earbuds"]
+  },
+  {
+    "id": "prod_3",
+    "name": "Premium Leather Watch Strap",
+    "description": "Genuine leather strap compatible with the Aura Smart Watch.",
+    "price_inr": 999,
+    "tags": ["accessories", "watch"]
+  },
+  {
+    "id": "prod_4",
+    "name": "Earbuds Protective Case",
+    "description": "Silicone protective case for Aura Wireless Earbuds with carabiner.",
+    "price_inr": 499,
+    "tags": ["accessories", "earbuds"]
+  },
+  {
+    "id": "prod_5",
+    "name": "Aura Portable Speaker",
+    "description": "Waterproof bluetooth speaker with 360-degree sound.",
+    "price_inr": 3499,
+    "tags": ["electronics", "audio", "speaker", "speakers"]
+  }
+]
