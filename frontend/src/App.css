@@ -807,9 +807,17 @@ body {
 }
 
 @keyframes pulseRecording {
-  0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.3); }
-  70% { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.3);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 59, 48, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
 }
 
 /* =========================================================
@@ -1015,6 +1023,7 @@ body {
 .dashboard-panel::-webkit-scrollbar {
   width: 6px;
 }
+
 .dashboard-panel::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
@@ -1115,9 +1124,17 @@ body {
   font-size: 0.85rem;
 }
 
-.audit-item.failed { border-left-color: #ff4757; }
-.audit-item.success { border-left-color: #2ed573; }
-.audit-item.approval_required { border-left-color: #ff9f43; }
+.audit-item.failed {
+  border-left-color: #ff4757;
+}
+
+.audit-item.success {
+  border-left-color: #2ed573;
+}
+
+.audit-item.approval_required {
+  border-left-color: #ff9f43;
+}
 
 .audit-header {
   display: flex;
@@ -1142,29 +1159,132 @@ body {
 }
 
 /* Approval Buttons */
-.approval-actions-container { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.approval-actions { display: flex; gap: 8px; }
-.btn-approve, .btn-reject { padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s ease; }
-.btn-approve { background: linear-gradient(135deg, #2ed573, #27ae60); color: white; }
-.btn-approve:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.btn-reject { background: rgba(255, 71, 87, 0.1); color: #ff4757; }
-.btn-reject:hover { background: rgba(255, 71, 87, 0.2); transform: translateY(-1px); }
-.approval-id-text { font-size: 0.7rem; color: #555; margin-top: 2px !important; }
+.approval-actions-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
 
-.approval-message { padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.approval-message.success { background: rgba(46, 213, 115, 0.1); border-left: 4px solid #2ed573; color: #2ed573; }
-.approval-message.error { background: rgba(255, 71, 87, 0.1); border-left: 4px solid #ff4757; color: #ff4757; }
-.approval-message p { margin: 0; font-weight: 600; }
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
 
-.btn-payment-link { padding: 8px 14px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); background: linear-gradient(135deg, #5b8cff, #7558eb); color: white; transition: all 0.2s ease; margin-top: 4px; }
-.btn-payment-link:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-approve,
+.btn-reject {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
 
-.markdown-body { line-height: 1.5; font-size: 0.95rem; }
-.markdown-body p { margin-bottom: 0.8em; }
-.markdown-body h1, .markdown-body h2, .markdown-body h3 { margin-top: 1.2em; margin-bottom: 0.5em; font-weight: 600; color: #fff; }
-.markdown-body h3 { font-size: 1.1rem; }
-.markdown-body ul, .markdown-body ol { margin-left: 1.5em; margin-bottom: 0.8em; }
-.markdown-body li { margin-bottom: 0.3em; }
+.btn-approve {
+  background: linear-gradient(135deg, #2ed573, #27ae60);
+  color: white;
+}
+
+.btn-approve:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-reject {
+  background: rgba(255, 71, 87, 0.1);
+  color: #ff4757;
+}
+
+.btn-reject:hover {
+  background: rgba(255, 71, 87, 0.2);
+  transform: translateY(-1px);
+}
+
+.approval-id-text {
+  font-size: 0.7rem;
+  color: #555;
+  margin-top: 2px !important;
+}
+
+.approval-message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.approval-message.success {
+  background: rgba(46, 213, 115, 0.1);
+  border-left: 4px solid #2ed573;
+  color: #2ed573;
+}
+
+.approval-message.error {
+  background: rgba(255, 71, 87, 0.1);
+  border-left: 4px solid #ff4757;
+  color: #ff4757;
+}
+
+.approval-message p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.btn-payment-link {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: linear-gradient(135deg, #5b8cff, #7558eb);
+  color: white;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+}
+
+.btn-payment-link:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.markdown-body {
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.markdown-body p {
+  margin-bottom: 0.8em;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  color: #fff;
+}
+
+.markdown-body h3 {
+  font-size: 1.1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin-left: 1.5em;
+  margin-bottom: 0.8em;
+}
+
+.markdown-body li {
+  margin-bottom: 0.3em;
+}
 
 /* =========================================================================
    MERCHANT CONSOLE - AURA TRUST CENTER & TIMELINE (Final Buildathon Upgrade)
@@ -1216,9 +1336,17 @@ body {
 }
 
 @keyframes pulse-status {
-  0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(76, 175, 80, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
 }
 
 .dashboard-grid {
@@ -1402,7 +1530,8 @@ body {
   gap: 12px;
 }
 
-.btn-approve, .btn-reject {
+.btn-approve,
+.btn-reject {
   flex: 1;
   padding: 10px;
   font-size: 0.95rem;
@@ -1545,7 +1674,10 @@ body {
   text-align: center;
 }
 
-.payment-tracker.pending p { margin: 0; color: rgba(255,255,255,0.8); }
+.payment-tracker.pending p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+}
 
 .spinner {
   width: 24px;
@@ -1556,7 +1688,11 @@ body {
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .payment-tracker.failed {
   border-color: rgba(255, 64, 129, 0.3);
@@ -1584,7 +1720,7 @@ body {
 }
 
 .premium-fail .fail-details {
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   padding: 15px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -1649,13 +1785,16 @@ body {
   flex: 1;
   padding: 12px;
   background: var(--panel);
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.btn-print:hover { background: rgba(255,255,255,0.1); }
+
+.btn-print:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
 
 
 /* =========================================================================
@@ -1666,12 +1805,14 @@ body {
 }
 
 @media print {
-  @page {
-    size: A4;
-    margin: 12mm;
-  }
 
-  html, body, #root, .app-container, .main-layout, .chat-window {
+
+  html,
+  body,
+  #root,
+  .app-container,
+  .main-layout,
+  .chat-window {
     background: #ffffff !important;
     color: #111111 !important;
     height: auto !important;
@@ -1685,9 +1826,12 @@ body {
     -webkit-backdrop-filter: none !important;
   }
 
-  body::before, body::after,
-  .app-container::before, .app-container::after,
-  .chat-window::before, .chat-window::after {
+  body::before,
+  body::after,
+  .app-container::before,
+  .app-container::after,
+  .chat-window::before,
+  .chat-window::after {
     display: none !important;
   }
 
@@ -1703,10 +1847,10 @@ body {
   }
 
   /* Reset all ancestors of the invoice so they don't constrain or offset it */
-  .messages-container, 
-  .messages-inner, 
-  .message, 
-  .message-content, 
+  .messages-container,
+  .messages-inner,
+  .message,
+  .message-content,
   .payment-tracker {
     display: block !important;
     position: static !important;
@@ -1725,16 +1869,22 @@ body {
     display: none !important;
   }
 
-  .premium-invoice-container, .premium-invoice-container * {
+  /* Hide the original Aura response text when printing the invoice */
+  .message:has(.premium-invoice-container) .markdown-body {
+    display: none !important;
+  }
+
+  .premium-invoice-container,
+  .premium-invoice-container * {
     visibility: visible;
   }
-  
+
   /* Success UI for screen (hidden in print) */
   .success-header {
     text-align: center;
     padding: 10px 0 20px 0;
   }
-  
+
   .success-icon {
     width: 48px;
     height: 48px;
@@ -1774,7 +1924,7 @@ body {
     padding: 0 !important;
     background: #ffffff !important;
   }
-  
+
   .premium-invoice {
     background: white;
     color: #111;
@@ -1924,7 +2074,8 @@ body {
     color: #333;
   }
 
-  .order-table th:last-child, .order-table td:last-child {
+  .order-table th:last-child,
+  .order-table td:last-child {
     text-align: right;
   }
 
@@ -2037,8 +2188,8 @@ body {
 }
 
 .btn-back {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
   padding: 10px 20px;
   border-radius: 8px;
@@ -2048,7 +2199,7 @@ body {
 }
 
 .btn-back:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .dashboard-content {
@@ -2061,7 +2212,7 @@ body {
 
 .btn-merchant-toggle {
   background: linear-gradient(135deg, #2e7d32, #1b5e20);
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   padding: 10px 16px;
   border-radius: 8px;
