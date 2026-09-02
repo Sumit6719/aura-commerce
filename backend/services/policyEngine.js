@@ -34,6 +34,41 @@ function validateOffer(productId, proposedPrice) {
     return { valid: true };
 }
 
+function validateCartOffer(items, proposedTotal) {
+    if (!POLICIES.NEGOTIATION_ENABLED) {
+        return { valid: false, reason: "Negotiation is currently disabled by merchant." };
+    }
+
+    let totalMinimumAllowed = 0;
+
+    for (const item of items) {
+        const product = catalogService.getProductById(item.id);
+        if (!product) {
+            return { valid: false, reason: `Product ${item.id} not found.` };
+        }
+        
+        if (product.availability !== 'in_stock' || product.stock <= 0) {
+            return { valid: false, reason: `Product ${product.name} is out of stock.` };
+        }
+
+        if (!product.purchase_allowed) {
+            return { valid: false, reason: `Product ${product.name} is not allowed for purchase.` };
+        }
+        
+        const qty = item.quantity || 1;
+        totalMinimumAllowed += (product.minimum_price * qty);
+    }
+
+    if (proposedTotal < totalMinimumAllowed) {
+        return { 
+            valid: false, 
+            reason: `Proposed total ₹${proposedTotal} is below the allowed bundle minimum of ₹${totalMinimumAllowed}.` 
+        };
+    }
+
+    return { valid: true };
+}
+
 function evaluateTransaction(totalAmount, lineItems) {
     // 1. Check stock for all items
     for (const item of lineItems) {
@@ -133,13 +168,19 @@ function updateTransactionStatus(transactionId, newStatus) {
     return false;
 }
 
+function resetPolicies() {
+    pendingApprovalsStore.length = 0;
+}
+
 module.exports = {
     validateOffer,
+    validateCartOffer,
     evaluateTransaction,
     getPolicies,
     addPendingApproval,
     getPendingApprovals,
     getTransaction,
     processApproval,
-    updateTransactionStatus
+    updateTransactionStatus,
+    resetPolicies
 };

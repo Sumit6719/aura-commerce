@@ -86,6 +86,13 @@ function removeProductFromMemory(productId) {
     catalogData.products = catalogData.products.filter(p => p.id !== productId);
 }
 
+function resetCatalogStock() {
+    catalogData.products.forEach(p => {
+        p.stock = 10;
+        p.availability = 'in_stock';
+    });
+}
+
 module.exports = {
     getMerchantInfo,
     getAllProducts,
@@ -95,5 +102,6 @@ module.exports = {
     updateStockInMemory,
     addProductToMemory,
     updateProductInMemory,
-    removeProductFromMemory
+    removeProductFromMemory,
+    resetCatalogStock
 };

@@ -19,7 +19,12 @@ function getRecentLogs(limit = 20) {
     return auditLogs.slice(0, limit);
 }
 
+function resetAudit() {
+    auditLogs = [];
+}
+
 module.exports = {
     logEvent,
-    getRecentLogs
+    getRecentLogs,
+    resetAudit
 };

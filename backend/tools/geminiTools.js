@@ -25,7 +25,7 @@ const toolDeclarations = [
     },
     {
         name: "recommend_accessories",
-        description: "Find catalog accessories explicitly compatible with a product. Use ONLY when the customer asks for accessories, asks what goes with a product, or an accessory recommendation is clearly relevant to the shopping intent. Do NOT call this tool for a simple product search, product listing, or category search.",
+        description: "Find catalog accessories explicitly compatible with a product. Use after recommending a main product to find compatible accessories for cross-selling and creating optional bundles.",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -36,26 +36,47 @@ const toolDeclarations = [
     },
     {
         name: "create_offer",
-        description: "Validate a negotiated offer.",
+        description: "Validate a negotiated offer against business rules for the complete bundle/cart. Use when a customer asks for a discount or negotiates the price of one or more items.",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                product_id: { type: Type.STRING, description: "ID of the product" },
-                proposed_price_inr: { type: Type.NUMBER, description: "The price you want to offer in INR" }
+                items: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING, description: "Product ID" },
+                            quantity: { type: Type.INTEGER, description: "Quantity of the product" }
+                        },
+                        required: ["id"]
+                    },
+                    description: "List of items in the cart"
+                },
+                proposed_price_inr: { type: Type.NUMBER, description: "The total negotiated price you want to offer in INR for the entire cart" }
             },
-            required: ["product_id", "proposed_price_inr"]
+            required: ["items", "proposed_price_inr"]
         }
     },
     {
         name: "initiate_checkout",
-        description: "Initiate checkout state when the customer clearly expresses purchase intent.",
+        description: "Initiate checkout state when the customer clearly expresses purchase intent. Must include all confirmed items and accessories.",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                product_id: { type: Type.STRING, description: "ID of the product to checkout" },
-                quantity: { type: Type.INTEGER, description: "Quantity of the product to purchase. Defaults to 1 if not specified." }
+                items: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING, description: "Product ID" },
+                            quantity: { type: Type.INTEGER, description: "Quantity to purchase" }
+                        },
+                        required: ["id"]
+                    },
+                    description: "List of all items to checkout, including accepted accessories"
+                }
             },
-            required: ["product_id"]
+            required: ["items"]
         }
     },
     {

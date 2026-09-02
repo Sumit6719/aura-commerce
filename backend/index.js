@@ -493,6 +493,37 @@ app.get('/api/order/status', async (req, res) => {
     }
 });
 
+app.post('/api/admin/reset', (req, res) => {
+    try {
+        const sqlite3 = require('sqlite3').verbose();
+        const db = new sqlite3.Database(require('path').join(__dirname, 'aura.db'));
+        const catalog = require('./catalog.json');
+        
+        db.serialize(() => {
+            db.run('DELETE FROM sales');
+            db.run('DELETE FROM inventory');
+            
+            const stmt = db.prepare('INSERT INTO inventory (product_id, product_name, price, available_quantity, sold_quantity, is_active) VALUES (?, ?, ?, ?, 0, 1)');
+            catalog.products.forEach(p => {
+                stmt.run(p.id, p.name, p.price, 10);
+            });
+            stmt.finalize();
+        });
+
+        catalogService.resetCatalogStock();
+        analyticsService.resetMetrics();
+        orderService.resetOrders();
+        auditService.resetAudit();
+        policyEngine.resetPolicies();
+        require('./agentCore').resetAgentState();
+
+        auditService.logEvent('DEMO_RESET', 'Admin', 'Reset all dashboard demo data successfully.', 'SUCCESS');
+        res.json({ success: true, message: "Dashboard reset successfully" });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

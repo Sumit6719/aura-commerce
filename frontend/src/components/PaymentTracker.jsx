@@ -220,14 +220,18 @@ export default function PaymentTracker({ url }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {orderState.items.map((item, i) => (
-                                    <tr key={i}>
-                                        <td>{item.name}</td>
-                                        <td>1</td>
-                                        <td>₹{item.agreed_price.toLocaleString()}</td>
-                                        <td>₹{item.agreed_price.toLocaleString()}</td>
-                                    </tr>
-                                ))}
+                                {orderState.items.map((item, i) => {
+                                    const qty = item.quantity || 1;
+                                    const amount = item.agreed_price * qty;
+                                    return (
+                                        <tr key={i}>
+                                            <td>{item.name}</td>
+                                            <td>{qty}</td>
+                                            <td>₹{item.agreed_price.toLocaleString()}</td>
+                                            <td>₹{amount.toLocaleString()}</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -235,11 +239,19 @@ export default function PaymentTracker({ url }) {
                     <div className="invoice-totals">
                         <div className="totals-row">
                             <span>Subtotal</span>
-                            <span>₹{orderState.totalAmount.toLocaleString()}</span>
+                            <span>₹{
+                                orderState.items.reduce((sum, item) => sum + ((item.original_price || item.agreed_price) * (item.quantity || 1)), 0).toLocaleString()
+                            }</span>
                         </div>
                         <div className="totals-row">
                             <span>Discount</span>
-                            <span>₹0</span>
+                            <span>{
+                                (() => {
+                                    const subtotal = orderState.items.reduce((sum, item) => sum + ((item.original_price || item.agreed_price) * (item.quantity || 1)), 0);
+                                    const discount = subtotal - orderState.totalAmount;
+                                    return discount > 0 ? `-₹${discount.toLocaleString()}` : '₹0';
+                                })()
+                            }</span>
                         </div>
                         <div className="totals-row">
                             <span>Tax</span>

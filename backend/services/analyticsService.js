@@ -36,10 +36,22 @@ function getMetrics() {
         conversionRate: parseFloat(conversionRate)
     };
 }
+function resetMetrics() {
+    metrics = {
+        totalRevenue: 0,
+        aiAttributedRevenue: 0,
+        upsellRevenue: 0,
+        transactions: 0,
+        blockedTransactions: 0,
+        recommendationsMade: 0,
+        conversations: 0
+    };
+}
 
 module.exports = {
     recordTransaction,
     recordConversation,
     recordRecommendation,
-    getMetrics
+    getMetrics,
+    resetMetrics
 };

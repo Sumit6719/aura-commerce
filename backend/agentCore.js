@@ -43,13 +43,33 @@ CRITICAL RULES:
 1. ONLY sell catalog products. Immediately use 'search_products' when asked for a category. Do NOT ask preferences before searching.
 2. NEVER invent prices or product details. If the user asks for a specific product specification (e.g. Bluetooth version, battery life, weight) and it is not explicitly visible in your immediate conversation history, you MUST immediately call 'get_product' using the product ID to retrieve the authoritative catalog data before answering. Answer ONLY using the returned data. If the returned data lacks the requested specification, explicitly state that it is not available.
 3. Use 'check_stock' ONLY when the customer asks about availability, wants to purchase, or before generating a payment link.
-4. Use 'recommend_accessories' ONLY when the customer asks for accessories, asks what goes with a product, or when an accessory recommendation is clearly relevant to the stated shopping intent. Do NOT automatically recommend accessories for a simple product search.
-5. Generate payment links with 'generate_payment_link' ONLY when the customer clearly wants to purchase, using exact product IDs and agreed prices.
+4. OUT-OF-STOCK BEHAVIOR: If a product's stock reaches 0, you MUST NOT allow the customer to purchase it. Tell the customer clearly (e.g. "I'm sorry, but that product is currently out of stock.") and suggest an available alternative.
+5. ACCESSORY RECOMMENDATIONS: After recommending a main product, use 'recommend_accessories' to understand compatible accessories. Suggest relevant accessories (e.g. straps for a watch, cases for headphones). Explain briefly WHY an accessory is useful. Treat accessories as an OPTIONAL bundle / upsell. Do NOT aggressively push accessories.
+6. Generate payment links with 'generate_payment_link' ONLY when the customer clearly wants to purchase, using exact product IDs and agreed prices.
 6. If a payment requires approval, explain clearly that it's paused for review.
-8. DISCOUNT NEGOTIATION: When a customer first asks for a discount casually (e.g. "Can you give me a discount?"), do NOT immediately use 'create_offer'. Instead, respond naturally that you can check if there's flexibility. ONLY use 'create_offer' if the customer continues to press for a discount with genuine purchase intent (e.g., "Yes, I really want to buy it but it's too high"). Do NOT allow unlimited repeated discount requests.
-9. IF DISCOUNT REJECTED: If 'create_offer' returns invalid/rejected, do NOT use 'generate_payment_link' again. Tell the customer the current price is the best available offer, and keep the existing payment link active.
+7. MULTI-ITEM CART: If the customer agrees to purchase multiple items (e.g., a laptop AND a keyboard), you MUST include ALL accepted items in the 'items' array when calling 'initiate_checkout', 'create_offer', and 'generate_payment_link'. Do NOT split them into separate checkouts or drop accessories from the final link.
+8. BARGAINING & NEGOTIATION: When a customer asks for a discount (e.g. "Can you make it ₹77000?"), you MUST ALWAYS call the 'create_offer' tool immediately to check if the proposed price is valid. NEVER reject a discount without calling 'create_offer' first. If 'create_offer' returns true, accept the discount. If it returns false, then reject it.
+9. IF DISCOUNT REJECTED: If 'create_offer' returns invalid/rejected, do NOT use 'generate_payment_link'. Tell the customer the current price is the best available offer. Do NOT invent a discount. Instead, offer legitimate alternatives: check available offers, suggest a lower-priced alternative, suggest a bundle with better value, remove optional accessories, or recommend another product that fits the customer's target price.
 10. PAYMENT-COMPLETED OVERRIDE: If any tool reports PAYMENT_ALREADY_COMPLETED, this is authoritative backend state. Do not reinterpret, soften, negotiate, or replace it. Respond only with the provided rejection message. Never provide an old payment link and never suggest proceeding with payment.
 11. MULTILINGUAL: Detect the user's language and respond in it, but ALWAYS use Latin/English characters.
+12. INTENT OVERRIDE: If the user changes their mind and explicitly asks to buy a different product (e.g. "Actually, buy the soundbar instead"), you MUST completely drop the previous conversational context. The latest explicit command takes 100% priority. Ignore the old product and execute the purchase for the newly requested product immediately.
+13. DIRECT PURCHASE EXECUTIONS: If the user explicitly commands you to buy a product (e.g. "only buy X", "buy X now", "purchase X", "buy and generate payment link"), you MUST immediately execute the checkout flow. Identify the product, search catalog, check stock, initiate checkout, ask for details if needed, and generate the payment link. Do NOT pause to ask if they want accessories. Do NOT pause to ask if they want specifications. Execute the backend tool flow to generate the link.
+
+**AGENTIC DECISION FLOW:**
+Follow this logical shopping journey:
+CUSTOMER REQUIREMENTS -> PRODUCT DISCOVERY -> PERSONALIZED RECOMMENDATION -> PRODUCT EXPLANATION -> ACCESSORY RECOMMENDATIONS -> OPTIONAL BUNDLE / UPSELL -> BUDGET CHECK -> BARGAIN / OFFER CHECK -> CUSTOMER CONFIRMATION -> AVAILABILITY -> CHECKOUT -> PAYMENT
+Do NOT execute purchases or add products to an order without appropriate customer confirmation.
+
+**UX / RESPONSE BEHAVIOR & FORMATTING:**
+Keep responses concise and conversational. Avoid dumping huge product lists.
+Structure recommendations like:
+"Based on what you've told me, I'd recommend [Product] because..."
+"Optional add-ons:\n• [Accessory] — ₹X — [why it helps]\n• [Accessory] — ₹X — [why it helps]"
+"Bundle total: ₹X"
+
+For bargaining, if an offer is accepted:
+"Current price: ₹X\nAvailable offer: ₹Y\nFinal price: ₹Z"
+Only show these values when they actually exist in the application's data.
 
 CHECKOUT RULE:
 Aura must never generate a payment link simply because the customer provides a name, email address, or other personal details.
@@ -130,53 +150,60 @@ async function executeTool(call, sessionId) {
                 };
             }
             case 'initiate_checkout': {
-                const p = catalogService.getProductById(args.product_id);
-                if (!p) return { error: "Product not found" };
+                if (!args.items || args.items.length === 0) {
+                    return { error: "No items provided for checkout" };
+                }
 
-                const requestedQuantity = args.quantity || 1;
+                const confirmedItems = [];
+                for (const item of args.items) {
+                    const p = catalogService.getProductById(item.id);
+                    if (!p) return { error: `Product ${item.id} not found` };
 
-                if (p.stock <= 0) return { error: "Product is out of stock" };
+                    const requestedQuantity = item.quantity || 1;
 
-                if (requestedQuantity > p.stock) {
-                    checkoutStates[sessionId] = {
-                        purchaseIntentConfirmed: false,
-                        awaitingCustomerDetails: false,
-                        customerDetailsReceived: false,
-                        productId: args.product_id,
-                        requestedQuantity: requestedQuantity,
-                        availableQuantity: p.stock,
-                        confirmedQuantity: null,
-                        customerName: null,
-                        customerEmail: null
-                    };
-                    return {
-                        status: "partial_stock_available",
-                        requested_quantity: requestedQuantity,
-                        available_stock: p.stock,
-                        message: `We currently have ${p.stock} units available, but you requested ${requestedQuantity}. Please ask the customer if they would like to proceed with the ${p.stock} available units.`
-                    };
+                    if (p.stock <= 0) return { error: `Product ${p.name} is out of stock` };
+
+                    if (requestedQuantity > p.stock) {
+                        // If any item has insufficient stock, we halt the checkout and ask
+                        checkoutStates[sessionId] = {
+                            purchaseIntentConfirmed: false,
+                            awaitingCustomerDetails: false,
+                            customerDetailsReceived: false,
+                            items: args.items, // store the attempted cart
+                            customerName: null,
+                            customerEmail: null
+                        };
+                        return {
+                            status: "partial_stock_available",
+                            product_id: p.id,
+                            requested_quantity: requestedQuantity,
+                            available_stock: p.stock,
+                            message: `We currently have ${p.stock} units of ${p.name} available, but you requested ${requestedQuantity}. Please ask the customer if they would like to proceed with the ${p.stock} available units.`
+                        };
+                    }
+                    
+                    confirmedItems.push({
+                        id: p.id,
+                        name: p.name,
+                        unit_price: p.price,
+                        confirmed_quantity: requestedQuantity
+                    });
                 }
 
                 checkoutStates[sessionId] = {
                     purchaseIntentConfirmed: true,
                     awaitingCustomerDetails: true,
                     customerDetailsReceived: false,
-                    productId: args.product_id,
-                    requestedQuantity: requestedQuantity,
-                    availableQuantity: p.stock,
-                    confirmedQuantity: requestedQuantity,
+                    items: confirmedItems, // array of {id, name, unit_price, confirmed_quantity}
                     customerName: null,
                     customerEmail: null
                 };
 
-                console.log(`[CHECKOUT] Checkout initiated for session ${sessionId}, product ${args.product_id}, qty ${requestedQuantity}`);
+                console.log(`[CHECKOUT] Checkout initiated for session ${sessionId} with ${confirmedItems.length} items`);
                 console.log(`[CHECKOUT] Awaiting customer details`);
                 return {
                     status: "awaiting_customer_details",
-                    product_id: args.product_id,
-                    product_name: p.name,
-                    unit_price: p.price,
-                    confirmed_quantity: requestedQuantity
+                    items: confirmedItems
                 };
             }
             case 'create_offer': {
@@ -200,18 +227,18 @@ async function executeTool(call, sessionId) {
                     }
                 }
 
-                const validation = policyEngine.validateOffer(args.product_id, args.proposed_price_inr);
+                const validation = policyEngine.validateCartOffer(args.items, args.proposed_price_inr);
                 if (!validation.valid) {
                     auditService.logEvent('POLICY_REJECTED', 'Policy Engine', `Offer of ₹${args.proposed_price_inr} rejected: ${validation.reason} `, 'FAILED');
                     return { valid: false, reason: validation.reason };
                 }
-                auditService.logEvent('OFFER_CREATED', 'Aura AI', `Offer of ₹${args.proposed_price_inr} for ${args.product_id} approved.`, 'SUCCESS');
+                auditService.logEvent('OFFER_CREATED', 'Aura AI', `Offer of ₹${args.proposed_price_inr} approved.`, 'SUCCESS');
                 return { valid: true };
             }
             case 'generate_payment_link': {
                 // GUARD: Ensure checkout state is valid
                 const state = checkoutStates[sessionId];
-                if (!state || !state.purchaseIntentConfirmed || !state.awaitingCustomerDetails || !state.customerDetailsReceived || !state.customerName || !state.customerEmail || !state.productId) {
+                if (!state || !state.purchaseIntentConfirmed || !state.awaitingCustomerDetails || !state.customerDetailsReceived || !state.customerName || !state.customerEmail || !state.items) {
                     console.log(`[CHECKOUT] Payment link generation blocked: checkout not initiated or customer details not received`);
                     return {
                         status: "checkout_not_ready",
@@ -234,22 +261,20 @@ async function executeTool(call, sessionId) {
                 let totalAmount = 0;
                 let upsellAmount = 0;
                 let descriptionParts = [];
-                let primaryProductId = null;
 
                 // Validate items
                 for (const item of args.items) {
                     const product = catalogService.getProductById(item.id);
                     if (!product) throw new Error(`Invalid product ID: ${item.id} `);
 
-                    if (product.category !== 'Accessories') {
-                        primaryProductId = product.id;
-                    }
-
                     item.name = product.name; // Enrich item for the invoice
+                    item.original_price = product.price; // Inject original catalog price for E-Bill rendering
                     item.quantity = item.quantity || 1;
 
-                    if (item.id === state.productId) {
-                        item.quantity = state.confirmedQuantity || 1; // Backend authoritative override
+                    // Override with backend authoritative quantity if present in checkout state
+                    const stateItem = state.items.find(si => si.id === item.id);
+                    if (stateItem && stateItem.confirmed_quantity) {
+                        item.quantity = stateItem.confirmed_quantity;
                     }
 
                     totalAmount += (item.agreed_price * item.quantity);
@@ -270,17 +295,7 @@ async function executeTool(call, sessionId) {
                     }
                 }
 
-                // GUARD: Verify product match (only checking primary product, ignoring accessories)
-                if (primaryProductId && primaryProductId !== state.productId) {
-                    console.log(`[CHECKOUT] Payment link generation blocked: product mismatch`);
-                    return {
-                        status: "checkout_not_ready",
-                        reason: "PRODUCT_MISMATCH",
-                        message: "The selected checkout product has changed. Please confirm the product before continuing."
-                    };
-                }
-
-                console.log(`[CHECKOUT] Payment link generation authorized`);
+                console.log(`[CHECKOUT] Payment link generation authorized for ${args.items.length} items`);
 
                 const description = `Purchase: ${descriptionParts.join(', ')} `;
 
@@ -494,7 +509,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
     const toolCache = new Map();
     let hasSuccessfulSearch = false;
 
-    while (functionCallsHandled < 3) {
+    while (functionCallsHandled < 6) {
         console.log(`[GEMINI API] Model: gemini-3.6-flash | Purpose: Merchant Tool Loop | Session: ${sessionId} | History: ${activeSessions[sessionId].length}`);
         if (global.metrics) global.metrics.gemini_3_6_flash_calls++;
 
@@ -505,9 +520,9 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
         let availableTools = toolDeclarations;
 
         if (!purchaseIntentConfirmed) {
-            console.log("[GEMINI ROUTER] Pre-checkout tools: search_products, check_stock, recommend_accessories, record_context_recommendation, get_product, initiate_checkout");
+            console.log("[GEMINI ROUTER] Pre-checkout tools: search_products, check_stock, recommend_accessories, record_context_recommendation, get_product, initiate_checkout, create_offer");
             if (global.metrics) global.metrics.preCheckoutToolSetCalls = (global.metrics.preCheckoutToolSetCalls || 0) + 1;
-            availableTools = toolDeclarations.filter(t => !['create_offer', 'generate_payment_link'].includes(t.name));
+            availableTools = toolDeclarations.filter(t => !['generate_payment_link'].includes(t.name));
         } else {
             console.log("[GEMINI ROUTER] Transaction tools enabled");
             if (global.metrics) global.metrics.transactionToolSetCalls = (global.metrics.transactionToolSetCalls || 0) + 1;
@@ -682,7 +697,7 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
         }
     }
 
-    if (!responseText && functionCallsHandled >= 3) {
+    if (!responseText && functionCallsHandled >= 6) {
         console.log("[GEMINI API] Model: gemini-3.1-flash-lite | Purpose: Final Discovery Response");
         if (global.metrics) global.metrics.gemini_3_1_flash_lite_calls++;
 
@@ -716,9 +731,15 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
     return { responseText, paymentLink: generatedLink };
 }
 
+function resetAgentState() {
+    for (const key in activeSessions) delete activeSessions[key];
+    for (const key in checkoutStates) delete checkoutStates[key];
+}
+
 module.exports = {
     runMerchantAgent,
     activeSessions,
-    razorpay, // Export razorpay for the re-check generation in index.js later
-    ai
+    razorpay,
+    ai,
+    resetAgentState
 };

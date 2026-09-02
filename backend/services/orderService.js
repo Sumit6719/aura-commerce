@@ -68,11 +68,16 @@ function updateOrder(orderId, updateData) {
     return null;
 }
 
+function resetOrders() {
+    orders.length = 0;
+}
+
 module.exports = {
     createOrder,
     getOrderByUrl,
     getOrderByPaymentLinkId,
     getActiveOrderBySessionId,
     getLatestOrderBySessionId,
-    updateOrder
+    updateOrder,
+    resetOrders
 };
