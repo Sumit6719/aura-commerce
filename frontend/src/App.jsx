@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { API_URL } from './config';
 import './App.css';
 import Dashboard from './components/Dashboard';
 import ReactMarkdown from 'react-markdown';
@@ -74,7 +75,7 @@ function App() {
         
         const pollStatus = async () => {
           try {
-            const response = await fetch(`http://localhost:3005/api/chat/status?sessionId=${sessionId}`);
+            const response = await fetch(`${API_URL}/api/chat/status?sessionId=${sessionId}`);
             if (!isMounted) return false;
             const data = await response.json();
             
@@ -136,7 +137,7 @@ function App() {
       setTimeout(() => scrollToBottom(true), 50);
 
       try {
-        const response = await fetch('http://localhost:3005/api/chat', {
+        const response = await fetch(`${API_URL}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, message: userMessage.text })
@@ -162,7 +163,7 @@ function App() {
       setTimeout(() => scrollToBottom(true), 50);
 
       try {
-        const response = await fetch('http://localhost:3005/api/ai-buyer', {
+        const response = await fetch(`${API_URL}/api/ai-buyer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, intent: input })
@@ -197,7 +198,7 @@ function App() {
       setTimeout(() => scrollToBottom(true), 50);
 
       try {
-        const response = await fetch('http://localhost:3005/api/chat', {
+        const response = await fetch(`${API_URL}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, message: userMessage.text })
@@ -210,10 +211,10 @@ function App() {
         setVoiceState('PROCESSING');
 
         // Fetch concise voice summary asynchronously
-        fetch('http://localhost:3005/api/voice-summary', {
+        fetch(`${API_URL}/api/voice-summary`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: data.reply })
+          body: JSON.stringify({ sessionId })
         }).then(res => res.json()).then(summaryData => {
           setVoiceState('SPEAKING');
 
@@ -266,7 +267,7 @@ function App() {
       setTimeout(() => scrollToBottom(true), 50);
 
       try {
-        const response = await fetch('http://localhost:3005/api/ai-buyer', {
+        const response = await fetch(`${API_URL}/api/ai-buyer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, intent: spokenText })
@@ -281,12 +282,20 @@ function App() {
           setMessages(prev => [...prev, ...mappedTranscript]);
 
           const lastMessage = data.transcript[data.transcript.length - 1];
-          if (lastMessage) {
-            setVoiceState('PROCESSING');
-            fetch('http://localhost:3005/api/voice-summary', {
+          // Let the server optionally log the summary asynchronously
+          if (!data.paymentLink && data.status !== 'CHECKOUT_AWAITING_DETAILS') {
+            fetch(`${API_URL}/api/voice-summary`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: lastMessage.text })
+              body: JSON.stringify({ sessionId })
+            });
+          }
+          if (lastMessage) {
+            setVoiceState('PROCESSING');
+            fetch(`${API_URL}/api/voice-summary`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId })
             }).then(res => res.json()).then(summaryData => {
               setVoiceState('SPEAKING');
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { voiceService } from '../utils/voiceService';
+import { API_URL } from '../config';
 
 export default function PaymentTracker({ url }) {
     const [orderState, setOrderState] = useState(null);
@@ -11,7 +12,7 @@ export default function PaymentTracker({ url }) {
         
         const fetchStatus = async () => {
             try {
-                const response = await fetch(`http://localhost:3005/api/order/status?url=${encodeURIComponent(url)}`);
+                const response = await fetch(`${API_URL}/api/order/status?url=${encodeURIComponent(url)}`);
                 if (!isMounted) return;
                 
                 const data = await response.json();

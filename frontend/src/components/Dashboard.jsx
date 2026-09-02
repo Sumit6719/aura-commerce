@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_URL } from '../config';
 
 export default function Dashboard() {
     const [metrics, setMetrics] = useState(null);
@@ -11,11 +12,11 @@ export default function Dashboard() {
     const fetchData = async () => {
         try {
             const [mRes, aRes, apRes, pRes, sRes] = await Promise.all([
-                fetch('http://localhost:3005/api/dashboard/metrics'),
-                fetch('http://localhost:3005/api/dashboard/audit'),
-                fetch('http://localhost:3005/api/dashboard/approvals'),
-                fetch('http://localhost:3005/api/dashboard/policies'),
-                fetch('http://localhost:3005/api/dashboard/sales')
+                fetch(`${API_URL}/api/dashboard/metrics`),
+                fetch(`${API_URL}/api/dashboard/audit`),
+                fetch(`${API_URL}/api/dashboard/approvals`),
+                fetch(`${API_URL}/api/dashboard/policies`),
+                fetch(`${API_URL}/api/dashboard/sales`)
             ]);
             setMetrics(await mRes.json());
             setAuditLogs(await aRes.json());
@@ -30,7 +31,7 @@ export default function Dashboard() {
     const handleProcessApproval = async (transactionId, action) => {
         try {
             setApprovalMessage(null);
-            const response = await fetch('http://localhost:3005/api/dashboard/approvals/process', {
+            const response = await fetch(`${API_URL}/api/dashboard/approvals/process`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transactionId, action })
