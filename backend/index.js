@@ -330,7 +330,6 @@ app.post('/api/dashboard/approvals/process', async (req, res) => {
         });
 
         auditService.logEvent('PAYMENT_LINK_GENERATED', 'Merchant Console', `Generated link for ₹${result.totalAmount} after approval`, 'SUCCESS', { link_id: paymentLink.id, transactionId });
-        analyticsService.recordTransaction(true, result.totalAmount, true, upsellAmount);
 
         policyEngine.updateTransactionStatus(transactionId, 'payment_link_generated');
 
@@ -413,12 +412,19 @@ app.get('/api/order/status', async (req, res) => {
                 await dbService.recordSale(updatedOrderForDb, updatedOrderForDb.items);
                 console.log(`[DB] Successfully recorded sale and updated inventory for order ${updatedOrderForDb.id}`);
                 // Sync in-memory catalog for AI agents immediately
+                let upsellAmount = 0;
                 updatedOrderForDb.items.forEach(item => {
                     const product = catalogService.getProductById(item.id);
                     if (product) {
                         catalogService.updateStockInMemory(item.id, product.stock - item.quantity);
+                        if (product.category === 'Accessories') {
+                            upsellAmount += (item.agreed_price * (item.quantity || 1));
+                        }
                     }
                 });
+                
+                // Record analytics transaction ONLY on verified successful payment
+                analyticsService.recordTransaction(true, updatedOrderForDb.totalAmount, true, upsellAmount);
             } catch (err) {
                 // If err is a SQLite constraint error, it means we already processed this sale (idempotency caught it)
                 if (err.code === 'SQLITE_CONSTRAINT') {

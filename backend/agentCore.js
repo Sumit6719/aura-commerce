@@ -405,7 +405,6 @@ async function executeTool(call, sessionId) {
                 auditService.logEvent('PAYMENT_LINK_GENERATED', 'Razorpay', `Generated link for ₹${totalAmount} `, 'SUCCESS', { link_id: paymentLink.id });
                 console.log(`[PAYMENT] New payment link generated`);
                 console.log(`[PAYMENT] Active payment link updated`);
-                analyticsService.recordTransaction(true, totalAmount, true, upsellAmount);
 
                 if (checkoutStates[sessionId]) {
                     checkoutStates[sessionId].awaitingCustomerDetails = false;
