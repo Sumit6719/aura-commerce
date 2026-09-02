@@ -421,6 +421,150 @@ async function executeTool(call, sessionId) {
                     raw_razorpay: paymentLink // Optional: pass raw for debugging
                 };
             }
+            case 'finalize_checkout': {
+                // GUARD: Verify customer details
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!args.customer_name || args.customer_name.trim() === "" || !args.customer_email || !emailRegex.test(args.customer_email)) {
+                    console.log(`[CHECKOUT] Payment link generation blocked: invalid customer details`);
+                    return {
+                        status: "checkout_not_ready",
+                        reason: "INVALID_CUSTOMER_DETAILS",
+                        message: "The provided customer name or email is invalid."
+                    };
+                }
+
+                if (!args.items || args.items.length === 0) {
+                    return { error: "No items provided for checkout" };
+                }
+
+                let totalAmount = 0;
+                let descriptionParts = [];
+                const confirmedItems = [];
+
+                // Validate items and stock
+                for (const item of args.items) {
+                    const product = catalogService.getProductById(item.id);
+                    if (!product) return { error: `Invalid product ID: ${item.id}` };
+
+                    const requestedQuantity = item.quantity || 1;
+
+                    if (product.stock < requestedQuantity) {
+                        return {
+                            status: "checkout_blocked",
+                            reason: "INSUFFICIENT_STOCK",
+                            message: `Sorry, we only have ${product.stock} units of ${product.name} available.`
+                        };
+                    }
+
+                    item.name = product.name;
+                    item.original_price = product.price;
+                    item.quantity = requestedQuantity;
+
+                    totalAmount += (item.agreed_price * item.quantity);
+                    descriptionParts.push(`${item.quantity}x ${product.name}`);
+                    
+                    confirmedItems.push({
+                        id: product.id,
+                        name: product.name,
+                        unit_price: product.price,
+                        confirmed_quantity: requestedQuantity
+                    });
+                }
+
+                console.log(`[CHECKOUT] finalize_checkout authorized for ${args.items.length} items`);
+
+                const description = `Purchase: ${descriptionParts.join(', ')}`;
+
+                const evaluation = policyEngine.evaluateTransaction(totalAmount, args.items, true);
+                if (!evaluation.allowed) {
+                    if (evaluation.status === 'pending_approval') {
+                        const approvalId = `req_${Date.now()}`;
+                        policyEngine.addPendingApproval({ id: approvalId, amount: totalAmount, items: args.items, customer: args.customer_name, sessionId: sessionId });
+                        auditService.logEvent('TRANSACTION_BLOCKED', 'Policy Engine', evaluation.reason, 'APPROVAL_REQUIRED', { amount: totalAmount });
+                        analyticsService.recordTransaction(false, totalAmount);
+                        return { status: 'pending_approval', message: evaluation.reason };
+                    } else {
+                        auditService.logEvent('TRANSACTION_REJECTED', 'Policy Engine', evaluation.reason, 'FAILED');
+                        return { status: 'rejected', message: evaluation.reason };
+                    }
+                }
+
+                // CHECK FOR EXISTING ACTIVE PAYMENT LINK (Idempotency)
+                const existingOrder = orderService.getActiveOrderBySessionId(sessionId);
+                if (existingOrder) {
+                    if (existingOrder.totalAmount === totalAmount) {
+                        const existingItemsHash = JSON.stringify(existingOrder.items);
+                        const newItemsHash = JSON.stringify(args.items);
+                        if (existingItemsHash === newItemsHash) {
+                            console.log(`[PAYMENT] Idempotent request detected. Reusing existing link.`);
+                            return {
+                                status: 'success',
+                                link: existingOrder.shortUrl,
+                                payment_id: existingOrder.paymentLinkId,
+                                message: 'Reusing existing active payment link.'
+                            };
+                        }
+                    }
+
+                    try {
+                        const rzpLink = await razorpay.paymentLink.fetch(existingOrder.paymentLinkId);
+                        if (rzpLink.status === 'paid' || rzpLink.status === 'partially_paid') {
+                            return {
+                                status: "rejected",
+                                reason: "PAYMENT_ALREADY_COMPLETED",
+                                message: "Payment already completed for this order.",
+                                paymentLink: null
+                            };
+                        } else if (rzpLink.status === 'created') {
+                            await razorpay.paymentLink.cancel(existingOrder.paymentLinkId);
+                        }
+                        orderService.updateOrder(existingOrder.id, { status: 'SUPERSEDED' });
+                    } catch (cancelErr) {
+                        throw new Error(`Could not cancel existing payment link: ${cancelErr.message}`);
+                    }
+                }
+
+                // Generate Razorpay Link
+                const paymentLinkRequest = {
+                    amount: totalAmount * 100, // in paise
+                    currency: "INR",
+                    accept_partial: false,
+                    description: description.substring(0, 200),
+                    customer: { name: args.customer_name, email: args.customer_email },
+                    notify: { sms: false, email: false },
+                    reminder_enable: false
+                };
+
+                const paymentLink = await razorpay.paymentLink.create(paymentLinkRequest);
+
+                orderService.createOrder({
+                    sessionId: sessionId,
+                    items: args.items,
+                    totalAmount: totalAmount,
+                    customerName: args.customer_name,
+                    customerEmail: args.customer_email,
+                    paymentLinkId: paymentLink.id,
+                    shortUrl: paymentLink.short_url
+                });
+
+                auditService.logEvent('PAYMENT_LINK_GENERATED', 'Razorpay', `Generated link for ₹${totalAmount}`, 'SUCCESS', { link_id: paymentLink.id });
+                
+                checkoutStates[sessionId] = {
+                    purchaseIntentConfirmed: true,
+                    awaitingCustomerDetails: false,
+                    customerDetailsReceived: true,
+                    items: confirmedItems,
+                    customerName: args.customer_name,
+                    customerEmail: args.customer_email
+                };
+
+                const extractedUrl = paymentLink.short_url || paymentLink.shortUrl || paymentLink.url || paymentLink.payment_url;
+                return {
+                    status: 'success',
+                    link: extractedUrl,
+                    payment_id: paymentLink.id
+                };
+            }
             case 'verify_payment': {
                 const latestOrder = orderService.getLatestOrderBySessionId(sessionId);
                 if (!latestOrder || !latestOrder.paymentLinkId) {
@@ -541,22 +685,27 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
     while (functionCallsHandled < 6) {
         console.log(`[GEMINI API] Model: gemini-3.6-flash | Purpose: Merchant Tool Loop | Session: ${sessionId} | History: ${activeSessions[sessionId].length}`);
         if (global.metrics) global.metrics.gemini_3_6_flash_calls++;
+        let availableTools = toolDeclarations;
 
-        // Determine tool availability based on checkout state
         const purchaseIntentConfirmed = checkoutStates[sessionId]?.purchaseIntentConfirmed === true;
         const customerDetailsReceived = checkoutStates[sessionId]?.customerDetailsReceived === true;
 
-        let availableTools = toolDeclarations;
-
-        if (!purchaseIntentConfirmed) {
-            console.log("[GEMINI ROUTER] Pre-checkout tools: search_products, check_stock, recommend_accessories, record_context_recommendation, get_product, initiate_checkout, create_offer");
-            if (global.metrics) global.metrics.preCheckoutToolSetCalls = (global.metrics.preCheckoutToolSetCalls || 0) + 1;
-            availableTools = toolDeclarations.filter(t => !['generate_payment_link'].includes(t.name));
+        if (buyerType === 'ai') {
+            // For AI Buyer, use the atomic finalize_checkout and hide the human-centric two-step checkout
+            availableTools = toolDeclarations.filter(t => t.name !== 'initiate_checkout' && t.name !== 'generate_payment_link');
         } else {
-            console.log("[GEMINI ROUTER] Transaction tools enabled");
-            if (global.metrics) global.metrics.transactionToolSetCalls = (global.metrics.transactionToolSetCalls || 0) + 1;
-            if (!customerDetailsReceived) {
-                availableTools = toolDeclarations.filter(t => t.name !== 'generate_payment_link');
+            // For Normal Human, use two-step checkout and hide the AI atomic tool
+            availableTools = toolDeclarations.filter(t => t.name !== 'finalize_checkout');
+            if (!purchaseIntentConfirmed) {
+                console.log("[GEMINI ROUTER] Pre-checkout tools enabled");
+                if (global.metrics) global.metrics.preCheckoutToolSetCalls = (global.metrics.preCheckoutToolSetCalls || 0) + 1;
+                availableTools = availableTools.filter(t => !['generate_payment_link'].includes(t.name));
+            } else {
+                console.log("[GEMINI ROUTER] Transaction tools enabled");
+                if (global.metrics) global.metrics.transactionToolSetCalls = (global.metrics.transactionToolSetCalls || 0) + 1;
+                if (!customerDetailsReceived) {
+                    availableTools = availableTools.filter(t => t.name !== 'generate_payment_link');
+                }
             }
         }
 
@@ -590,12 +739,21 @@ async function runMerchantAgent({ sessionId, message, buyerType = 'human' }) {
             return message;
         });
 
+        const finalSystemPrompt = buyerType === 'ai'
+            ? SYSTEM_PROMPT + `\n\n**AI-TO-AI INTERNAL CHANNEL (COMPACT MODE):**\nYou are responding to an internal AI Buyer, NOT a human. You MUST respond ONLY with a raw, compact JSON object summarizing your results. Do NOT use natural language filler. Do NOT wrap in markdown code blocks.
+Example formats:
+{"type": "product_result", "productId": "P101", "price": 75000, "stock": 10}
+{"type": "accessories", "items": [{"id": "A101", "price": 5000}]}
+{"type": "offer", "originalTotal": 80000, "finalTotal": 77000, "approved": true}
+{"type": "checkout", "paymentLink": "https://rzp.io/..."}`
+            : SYSTEM_PROMPT;
+
         const response = await ai.models.generateContent({
             model: 'gemini-3.6-flash',
             contents: optimizedHistory,
             config: {
                 tools: [{ functionDeclarations: availableTools }],
-                systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
+                systemInstruction: { parts: [{ text: finalSystemPrompt }] }
             }
         });
 
