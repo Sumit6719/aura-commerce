@@ -54,6 +54,7 @@ CRITICAL RULES:
 11. MULTILINGUAL: Detect the user's language and respond in it, but ALWAYS use Latin/English characters.
 12. INTENT OVERRIDE: If the user changes their mind and explicitly asks to buy a different product (e.g. "Actually, buy the soundbar instead"), you MUST completely drop the previous conversational context. The latest explicit command takes 100% priority. Ignore the old product and execute the purchase for the newly requested product immediately.
 13. DIRECT PURCHASE EXECUTIONS: If the user explicitly commands you to buy a product (e.g. "only buy X", "buy X now", "purchase X", "buy and generate payment link"), you MUST immediately execute the checkout flow. Identify the product, search catalog, check stock, initiate checkout, ask for details if needed, and generate the payment link. Do NOT pause to ask if they want accessories. Do NOT pause to ask if they want specifications. Execute the backend tool flow to generate the link.
+14. VERIFYING PAYMENT: If the user says they paid, or asks for confirmation of their order, you MUST use the 'verify_payment' tool immediately. Do NOT trust the user's claim without verification. If verified successfully, give them a clear success message like "Payment confirmed by Razorpay! Your order is successfully placed." If not, tell them it's still pending or failed.
 
 **AGENTIC DECISION FLOW:**
 Follow this logical shopping journey:
@@ -419,6 +420,35 @@ async function executeTool(call, sessionId) {
                     payment_id: paymentLink.id,
                     raw_razorpay: paymentLink // Optional: pass raw for debugging
                 };
+            }
+            case 'verify_payment': {
+                const latestOrder = orderService.getLatestOrderBySessionId(sessionId);
+                if (!latestOrder || !latestOrder.paymentLinkId) {
+                    return { status: "no_order_found", message: "No active order found to verify." };
+                }
+
+                try {
+                    const rzpLink = await razorpay.paymentLink.fetch(latestOrder.paymentLinkId);
+                    if (rzpLink.status === 'paid') {
+                        // The frontend polling / webhook normally handles this, but we do it synchronously here too 
+                        // to ensure the Agent has authoritative state immediately.
+                        const verifiedPayment = rzpLink.payments && rzpLink.payments.length > 0 ? rzpLink.payments[0] : null;
+                        
+                        // We will just let the frontend know the payment is successful so it renders the E-Bill.
+                        // Wait, if we return success, Aura says "Payment successful".
+                        return { 
+                            status: "success", 
+                            message: "Payment is verified as SUCCESS (paid). Provide a clear confirmation message to the user.",
+                            paymentLink: latestOrder.shortUrl // Crucial to return this so UI re-renders tracker!
+                        };
+                    } else if (rzpLink.status === 'cancelled' || rzpLink.status === 'expired') {
+                        return { status: "failed", message: "Razorpay reports payment as cancelled or expired. Order not confirmed." };
+                    } else {
+                        return { status: "pending", message: "Razorpay reports payment is still pending/unpaid. Tell the user you are still waiting for confirmation." };
+                    }
+                } catch (error) {
+                    return { status: "error", message: "Failed to verify payment with Razorpay API." };
+                }
             }
             case 'record_context_recommendation': {
                 auditService.logEvent('CONTEXT_DETECTED', 'Aura AI', `${args.preference_detected} → Personalized recommendation: ${args.recommended_product_id} `, 'SUCCESS', {

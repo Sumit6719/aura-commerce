@@ -4,14 +4,15 @@ const auditService = require('./services/auditService');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const BUYER_SYSTEM_PROMPT = `You are an AI Shopping Assistant for a user, chatting with 'Aura', a Merchant Agent.
-Goal: Fulfill the shopping intent efficiently.
-1. Be direct. State what you want.
-2. Evaluate products proposed by Aura.
-3. Once satisfied, ask for a payment link or say "DONE".
-4. NEVER invent prices/products. Wait for Aura to propose.
-5. Do not ask the user questions.
-6. Stop and say "DONE" if payment link is given or approval is required.`;
+const BUYER_SYSTEM_PROMPT = `You are an AI Shopping Assistant acting on behalf of a human user, chatting with 'Aura', a Merchant Agent.
+Your ONLY job is to translate the human's exact intent to Aura, and return questions back to the human.
+
+CRITICAL RULES:
+1. You MUST NEVER autonomously choose an accessory, accept a price, or answer a preference question on behalf of the human unless the human's explicit intent already authorized it.
+2. If Aura asks ANY question about accessories, options, or preferences, you MUST PAUSE AND ASK THE HUMAN.
+3. To ask the human, output exactly: "[TO_HUMAN] <your question>" and NOTHING ELSE. Example: "[TO_HUMAN] Aura offered a compatible keyboard. Do you want to add it?"
+4. Provide the name "Test User" and email "test@example.com" if Aura asks for customer details to finalize checkout.
+5. Stop and say "DONE" if a payment link is given.`;
 
 const buyerSessions = {};
 
@@ -34,7 +35,7 @@ async function executeAIBuyerJourney(sessionId, intent) {
     const transcript = [];
     let isDone = false;
     let turns = 0;
-    const MAX_TURNS = 3;
+    const MAX_TURNS = 1; // INTERACTIVE MODE: Always return to user after 1 turn
     const seenBuyerMessages = new Set();
 
     while (!isDone && turns < MAX_TURNS) {
@@ -64,6 +65,13 @@ async function executeAIBuyerJourney(sessionId, intent) {
                 isDone = true;
             }
 
+            let isToHuman = false;
+            if (buyerText.includes("[TO_HUMAN]")) {
+                buyerText = buyerText.replace("[TO_HUMAN]", "").trim();
+                isToHuman = true;
+                isDone = true; // Stop orchestrator loop to wait for human
+            }
+
             // Repeat Message Protection
             const normalizedMsg = buyerText.trim().toLowerCase();
             if (seenBuyerMessages.has(normalizedMsg)) {
@@ -79,7 +87,7 @@ async function executeAIBuyerJourney(sessionId, intent) {
                 transcript.push({ role: 'ai_buyer', text: buyerText });
             }
 
-            if (isDone && !buyerText.trim()) break;
+            if (isDone && (isToHuman || !buyerText.trim())) break;
 
             // 2. Send to Merchant Agent Core
             const merchantReplyRaw = await runMerchantAgent({
@@ -88,7 +96,15 @@ async function executeAIBuyerJourney(sessionId, intent) {
                 buyerType: 'ai'
             });
 
-            transcript.push({ role: 'merchant', text: merchantReplyRaw });
+            // Flatten object so React gets the link correctly
+            const merchantTranscriptEntry = { 
+                role: 'merchant', 
+                text: typeof merchantReplyRaw === 'string' ? merchantReplyRaw : (merchantReplyRaw.responseText || merchantReplyRaw.text || JSON.stringify(merchantReplyRaw)) 
+            };
+            if (typeof merchantReplyRaw === 'object' && merchantReplyRaw.paymentLink) {
+                merchantTranscriptEntry.paymentLink = merchantReplyRaw.paymentLink;
+            }
+            transcript.push(merchantTranscriptEntry);
 
             // Ensure the AI Buyer receives actual text, not "[object Object]"
             let merchantReplyText = "";

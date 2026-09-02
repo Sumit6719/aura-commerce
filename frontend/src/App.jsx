@@ -173,7 +173,8 @@ function App() {
         if (data.transcript) {
           const mappedTranscript = data.transcript.map(t => ({
             role: t.role === 'ai_buyer' ? 'user' : (t.role === 'merchant' ? 'model' : t.role),
-            text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text
+            text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text,
+            paymentUrl: t.paymentLink || null
           }));
           setMessages(prev => [...prev, ...mappedTranscript]);
         }

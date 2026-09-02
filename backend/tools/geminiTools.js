@@ -116,6 +116,15 @@ const toolDeclarations = [
             },
             required: ["preference_detected", "recommended_product_id", "reasoning"]
         }
+    },
+    {
+        name: "verify_payment",
+        description: "Verify the payment status of the current order with Razorpay. Use this when the customer claims they have paid or asks for order confirmation.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {},
+            required: []
+        }
     }
 ];
 
