@@ -475,7 +475,7 @@ async function executeTool(call, sessionId) {
 
                 const description = `Purchase: ${descriptionParts.join(', ')}`;
 
-                const evaluation = policyEngine.evaluateTransaction(totalAmount, args.items, true);
+                const evaluation = policyEngine.evaluateTransaction(totalAmount, args.items);
                 if (!evaluation.allowed) {
                     if (evaluation.status === 'pending_approval') {
                         const approvalId = `req_${Date.now()}`;
@@ -745,7 +745,8 @@ Example formats:
 {"type": "product_result", "productId": "P101", "price": 75000, "stock": 10}
 {"type": "accessories", "items": [{"id": "A101", "price": 5000}]}
 {"type": "offer", "originalTotal": 80000, "finalTotal": 77000, "approved": true}
-{"type": "checkout", "paymentLink": "https://rzp.io/..."}`
+{"type": "checkout", "paymentLink": "https://rzp.io/..."}
+{"type": "checkout", "status": "pending_approval", "message": "Requires approval"}`
             : SYSTEM_PROMPT;
 
         const response = await ai.models.generateContent({

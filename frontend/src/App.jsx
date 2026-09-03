@@ -82,11 +82,25 @@ function App() {
             if (data.status === 'payment_link_ready' && data.paymentUrl) {
               setMessages(prev => {
                 const newMessages = [...prev];
-                // Update the last message with the new paymentUrl so PaymentTracker mounts
                 if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
                   newMessages[newMessages.length - 1] = {
                     ...newMessages[newMessages.length - 1],
-                    paymentUrl: data.paymentUrl
+                    text: "The merchant has approved your order. Your secure payment is ready.",
+                    paymentUrl: data.paymentUrl,
+                    isPendingApproval: false
+                  };
+                }
+                return newMessages;
+              });
+              return true;
+            } else if (data.status === 'rejected') {
+              setMessages(prev => {
+                const newMessages = [...prev];
+                if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+                  newMessages[newMessages.length - 1] = {
+                    ...newMessages[newMessages.length - 1],
+                    text: "The merchant could not approve this order, so payment is not available.",
+                    isPendingApproval: false
                   };
                 }
                 return newMessages;
@@ -176,15 +190,25 @@ function App() {
             return {
               role: t.role,
               text: t.text,
-              paymentUrl: isLast ? data.paymentLink : null
+              paymentUrl: isLast ? data.paymentLink : null,
+              isPendingApproval: isLast ? data.isPendingApproval : false
             };
           });
-          setMessages(prev => [...prev, ...mappedTranscript]);
+
+          // Wait for a short duration to make the transition feel natural
+          setTimeout(() => {
+            setMessages(prev => {
+              const cleaned = prev.slice(0, -1);
+              return [...cleaned, ...mappedTranscript];
+            });
+            setIsLoading(false);
+          }, 1500);
         } else if (data.userFacingMessage) {
           setMessages(prev => [...prev, {
             role: 'model',
             text: data.userFacingMessage,
-            paymentUrl: data.paymentLink || null
+            paymentUrl: data.paymentLink || null,
+            isPendingApproval: data.isPendingApproval || false
           }]);
         }
       } catch (error) {
@@ -421,6 +445,11 @@ function App() {
                             </div>
                             {safePaymentUrl && (
                               <PaymentTracker url={safePaymentUrl} />
+                            )}
+                            {msg.role === 'model' && !safePaymentUrl && (msg.isPendingApproval || msg.text.toLowerCase().includes('manual approval') || msg.text.toLowerCase().includes('approval required')) && (
+                              <div style={{ marginTop: '15px', padding: '12px', background: 'rgba(255, 150, 0, 0.1)', border: '1px solid rgba(255, 150, 0, 0.3)', borderRadius: '8px', color: '#ffb347', fontWeight: 'bold', textAlign: 'center', fontSize: '0.9rem' }}>
+                                PENDING MERCHANT APPROVAL
+                              </div>
                             )}
                           </>
                         );

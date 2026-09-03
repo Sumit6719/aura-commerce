@@ -353,16 +353,21 @@ app.get('/api/chat/status', (req, res) => {
     }
 
     const order = orderService.getLatestOrderBySessionId(sessionId);
-    if (!order || !order.paymentLinkId) {
-        return res.json({ status: "pending_approval" });
+    if (order && order.paymentLinkId) {
+        return res.json({
+            status: "payment_link_ready",
+            paymentUrl: order.shortUrl,
+            orderId: order.id,
+            paymentLinkId: order.paymentLinkId
+        });
     }
 
-    return res.json({
-        status: "payment_link_ready",
-        paymentUrl: order.shortUrl,
-        orderId: order.id,
-        paymentLinkId: order.paymentLinkId
-    });
+    const transaction = policyEngine.getTransactionBySessionId(sessionId);
+    if (transaction && transaction.status === 'rejected') {
+        return res.json({ status: "rejected" });
+    }
+
+    return res.json({ status: "pending_approval" });
 });
 
 // Order tracking endpoint for verified UI

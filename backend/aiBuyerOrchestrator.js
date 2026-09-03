@@ -128,9 +128,10 @@ async function executeAIBuyerJourney(sessionId, intent) {
                 merchantTranscriptEntry.paymentLink ||
                 lowerReply.includes("paymentlink") ||
                 lowerReply.includes("pay via") ||
-                (merchantReplyRaw && merchantReplyRaw.status === 'success' && merchantReplyRaw.link)
+                (merchantReplyRaw && merchantReplyRaw.status === 'success' && merchantReplyRaw.link) ||
+                (merchantReplyRaw && merchantReplyRaw.status === 'pending_approval')
             ) {
-                console.log(`[AI BUYER] Checkout ready. Autonomous journey complete.`);
+                console.log(`[AI BUYER] Checkout ready or pending. Autonomous journey complete.`);
                 isDone = true;
             }
 
@@ -166,7 +167,11 @@ async function executeAIBuyerJourney(sessionId, intent) {
             } else if (txt.includes("bundle") || txt.includes("offer") || txt.includes("negotiat") || txt.includes("discount")) {
                 sanitizedText = "I'll negotiate the best available bundle price.";
             } else if (txt.includes("accept") || txt.includes("finalize") || txt.includes("checkout") || txt.includes("proceed")) {
-                sanitizedText = "The purchase is ready. I'll hand it over to you for secure payment.";
+                if (totalAmount > 10000) {
+                    sanitizedText = "The order exceeds the merchant's automatic approval threshold, so I'll submit it for merchant approval.";
+                } else {
+                    sanitizedText = "The purchase is ready. I'll hand it over to you for secure payment.";
+                }
             }
             
             // Only add if it's not a duplicate of the last ai_buyer message to keep it clean
@@ -197,7 +202,11 @@ async function executeAIBuyerJourney(sessionId, intent) {
                         auraText = `I could not approve the bundle discount. The current price is ₹${parsed.originalTotal}.`;
                     }
                 } else if (parsed.type === "checkout") {
-                    auraText = "The order is ready. Your secure payment is available below.";
+                    if (parsed.status === "pending_approval") {
+                        auraText = "Your order exceeds the automatic limit and requires manual approval by the merchant.";
+                    } else {
+                        auraText = "The order is ready. Your secure payment is available below.";
+                    }
                 }
                 
                 if (auraText) {
@@ -206,6 +215,9 @@ async function executeAIBuyerJourney(sessionId, intent) {
                 
                 if (parsed.type === 'offer' && parsed.finalTotal) totalAmount = parsed.finalTotal;
                 if (parsed.type === 'checkout' && parsed.paymentLink) paymentLink = parsed.paymentLink;
+                if (parsed.type === 'checkout' && parsed.status === 'pending_approval') {
+                    userFacingTranscript[userFacingTranscript.length - 1].isPendingApproval = true;
+                }
                 if (parsed.paymentLink) paymentLink = parsed.paymentLink;
                 if (parsed.link) paymentLink = parsed.link;
             } catch (e) {}
@@ -213,7 +225,11 @@ async function executeAIBuyerJourney(sessionId, intent) {
         if (entry.paymentLink) paymentLink = entry.paymentLink;
     }
 
-    if (paymentLink) {
+    let isPendingApproval = false;
+    if (userFacingTranscript.length > 0 && userFacingTranscript[userFacingTranscript.length - 1].isPendingApproval) {
+        isPendingApproval = true;
+        userFacingMessage = "I have submitted the order for merchant approval. Please wait.";
+    } else if (paymentLink) {
         if (totalAmount > 0) {
             userFacingMessage = `Perfect. I found the right products for you and successfully negotiated the bundle to ₹${totalAmount}. Your secure payment is ready.`;
         } else {
@@ -227,7 +243,8 @@ async function executeAIBuyerJourney(sessionId, intent) {
         transcript,
         userFacingTranscript,
         userFacingMessage,
-        paymentLink
+        paymentLink,
+        isPendingApproval
     };
 }
 
