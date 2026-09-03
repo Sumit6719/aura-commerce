@@ -56,8 +56,8 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/ai-buyer', async (req, res) => {
     const { sessionId, intent } = req.body;
     try {
-        const transcript = await executeAIBuyerJourney(sessionId, intent);
-        res.json({ transcript });
+        const result = await executeAIBuyerJourney(sessionId, intent);
+        res.json(result);
     } catch (error) {
         console.error("AI Buyer API Error:", error);
         res.status(500).json({ error: 'Failed to execute AI Buyer journey' });

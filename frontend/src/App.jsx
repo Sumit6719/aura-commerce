@@ -156,7 +156,7 @@ function App() {
       }
     } else {
       // AI Buyer Mode
-      const userMessage = { role: 'user', text: `[Intent] ${input}` };
+      const userMessage = { role: 'user', text: input };
       setMessages(prev => [...prev, userMessage]);
       setInput('');
       setIsLoading(true);
@@ -170,7 +170,13 @@ function App() {
         });
         const data = await response.json();
 
-        if (data.transcript) {
+        if (data.userFacingMessage) {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: data.userFacingMessage,
+            paymentUrl: data.paymentLink || null
+          }]);
+        } else if (data.transcript) {
           const mappedTranscript = data.transcript.map(t => ({
             role: t.role === 'ai_buyer' ? 'user' : (t.role === 'merchant' ? 'model' : t.role),
             text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text,
@@ -261,7 +267,7 @@ function App() {
       }
     } else {
       // AI Buyer Mode
-      const userMessage = { role: 'user', text: `[Intent] ${spokenText}` };
+      const userMessage = { role: 'user', text: spokenText };
       setMessages(prev => [...prev, userMessage]);
       setVoiceState('PROCESSING');
       setIsLoading(true);
@@ -275,63 +281,24 @@ function App() {
         });
         const data = await response.json();
 
-        if (data.transcript) {
+        if (data.userFacingMessage) {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: data.userFacingMessage,
+            paymentUrl: data.paymentLink || null
+          }]);
+
+          setVoiceState('SPEAKING');
+          voiceService.speak(data.userFacingMessage, () => {
+            setVoiceState('IDLE');
+          });
+        } else if (data.transcript) {
           const mappedTranscript = data.transcript.map(t => ({
             role: t.role === 'ai_buyer' ? 'user' : (t.role === 'merchant' ? 'model' : t.role),
             text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text
           }));
           setMessages(prev => [...prev, ...mappedTranscript]);
-
-          const lastMessage = data.transcript[data.transcript.length - 1];
-          // Let the server optionally log the summary asynchronously
-          if (!data.paymentLink && data.status !== 'CHECKOUT_AWAITING_DETAILS') {
-            fetch(`${API_URL}/api/voice-summary`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionId })
-            });
-          }
-          if (lastMessage) {
-            setVoiceState('PROCESSING');
-            fetch(`${API_URL}/api/voice-summary`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionId })
-            }).then(res => res.json()).then(summaryData => {
-              setVoiceState('SPEAKING');
-
-              let finalTTS = summaryData.voiceReply;
-              if (!finalTTS || finalTTS.length > 300) {
-                finalTTS = "Your request has been processed. Please check the details on screen.";
-              }
-
-              console.log("=== AURA VOICE DEBUG ===");
-              console.log("Original response length:", lastMessage.text?.length || 0);
-              console.log("Voice summary:", summaryData.voiceReply);
-              console.log("Voice summary length:", summaryData.voiceReply?.length || 0);
-              console.log("TTS text:", finalTTS);
-
-              voiceService.speak(finalTTS, () => {
-                setVoiceState('IDLE');
-              });
-            }).catch(err => {
-              console.error('Voice summary failed', err);
-              setVoiceState('SPEAKING');
-
-              const fallbackTTS = "Your request has been processed. Please check the details on screen.";
-
-              console.log("=== AURA VOICE DEBUG ===");
-              console.log("Original response length:", lastMessage.text?.length || 0);
-              console.log("Voice summary: [FAILED]");
-              console.log("TTS text:", fallbackTTS);
-
-              voiceService.speak(fallbackTTS, () => {
-                setVoiceState('IDLE');
-              });
-            });
-          } else {
-            setVoiceState('IDLE');
-          }
+          setVoiceState('IDLE');
         } else {
           setVoiceState('IDLE');
         }
