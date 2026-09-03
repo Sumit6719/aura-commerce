@@ -125,6 +125,31 @@ const toolDeclarations = [
             properties: {},
             required: []
         }
+    },
+    {
+        name: "finalize_checkout",
+        description: "Atomically validate the final cart and generate a Razorpay payment link. Use this to finalize the purchase in one step when the customer has confirmed intent and provided details.",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                items: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            id: { type: Type.STRING, description: "Product ID" },
+                            quantity: { type: Type.INTEGER, description: "Quantity to purchase" },
+                            agreed_price: { type: Type.NUMBER, description: "Price agreed upon" }
+                        },
+                        required: ["id", "agreed_price"]
+                    },
+                    description: "List of items to purchase"
+                },
+                customer_name: { type: Type.STRING, description: "Name of the customer" },
+                customer_email: { type: Type.STRING, description: "Email of the customer" }
+            },
+            required: ["items", "customer_name", "customer_email"]
+        }
     }
 ];
 
