@@ -2232,4 +2232,21 @@ body {
 .main-layout.customer-focused .chat-window {
   width: min(1000px, 100%);
   margin: 0 auto;
+}/* AI BUYER */
+
+.message.ai_buyer {
+  justify-content: flex-start;
+}
+
+.message.ai_buyer .message-content {
+  color: #d1d5db;
+  background: linear-gradient(135deg, rgba(40, 50, 70, 0.4), rgba(20, 30, 45, 0.4));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 5px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.message.ai_buyer .message-content:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
 }

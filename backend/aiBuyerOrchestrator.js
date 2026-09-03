@@ -152,18 +152,65 @@ async function executeAIBuyerJourney(sessionId, intent) {
     let userFacingMessage = "Your autonomous shopping session is complete.";
     let paymentLink = null;
     let totalAmount = 0;
+    
+    const userFacingTranscript = [];
 
     for (const entry of transcript) {
-        if (entry.paymentLink) paymentLink = entry.paymentLink;
-        if (entry.role === 'merchant') {
+        if (entry.role === 'ai_buyer') {
+            const txt = entry.text.toLowerCase();
+            let sanitizedText = "I am processing the request.";
+            if (txt.includes("find") || txt.includes("search") || txt.includes("looking for")) {
+                sanitizedText = "I'll find the best available options within the customer's budget.";
+            } else if (txt.includes("accessori") || txt.includes("compatible")) {
+                sanitizedText = "I'll check for compatible accessories that could improve the purchase.";
+            } else if (txt.includes("bundle") || txt.includes("offer") || txt.includes("negotiat") || txt.includes("discount")) {
+                sanitizedText = "I'll negotiate the best available bundle price.";
+            } else if (txt.includes("accept") || txt.includes("finalize") || txt.includes("checkout") || txt.includes("proceed")) {
+                sanitizedText = "The purchase is ready. I'll hand it over to you for secure payment.";
+            }
+            
+            // Only add if it's not a duplicate of the last ai_buyer message to keep it clean
+            const lastAIBuyerMsg = userFacingTranscript.slice().reverse().find(m => m.role === 'ai_buyer');
+            if (!lastAIBuyerMsg || lastAIBuyerMsg.text !== sanitizedText) {
+                userFacingTranscript.push({ role: 'ai_buyer', text: sanitizedText });
+            }
+        } else if (entry.role === 'merchant') {
             try {
                 const parsed = JSON.parse(entry.text);
+                let auraText = "";
+                if (parsed.type === "product_result") {
+                    if (parsed.productId) {
+                        auraText = `I found a matching product for ₹${parsed.price}. It is currently in stock.`;
+                    } else {
+                        auraText = `I could not find any available products matching that request.`;
+                    }
+                } else if (parsed.type === "accessories") {
+                    if (parsed.items && parsed.items.length > 0) {
+                        auraText = `I found a compatible accessory for ₹${parsed.items[0].price}.`;
+                    } else {
+                        auraText = `No compatible accessories were found.`;
+                    }
+                } else if (parsed.type === "offer") {
+                    if (parsed.approved) {
+                        auraText = `I negotiated the bundle down to ₹${parsed.finalTotal}.`;
+                    } else {
+                        auraText = `I could not approve the bundle discount. The current price is ₹${parsed.originalTotal}.`;
+                    }
+                } else if (parsed.type === "checkout") {
+                    auraText = "The order is ready. Your secure payment is available below.";
+                }
+                
+                if (auraText) {
+                    userFacingTranscript.push({ role: 'aura', text: auraText });
+                }
+                
                 if (parsed.type === 'offer' && parsed.finalTotal) totalAmount = parsed.finalTotal;
                 if (parsed.type === 'checkout' && parsed.paymentLink) paymentLink = parsed.paymentLink;
                 if (parsed.paymentLink) paymentLink = parsed.paymentLink;
                 if (parsed.link) paymentLink = parsed.link;
             } catch (e) {}
         }
+        if (entry.paymentLink) paymentLink = entry.paymentLink;
     }
 
     if (paymentLink) {
@@ -178,6 +225,7 @@ async function executeAIBuyerJourney(sessionId, intent) {
 
     return {
         transcript,
+        userFacingTranscript,
         userFacingMessage,
         paymentLink
     };

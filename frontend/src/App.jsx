@@ -170,19 +170,22 @@ function App() {
         });
         const data = await response.json();
 
-        if (data.userFacingMessage) {
+        if (data.userFacingTranscript && data.userFacingTranscript.length > 0) {
+          const mappedTranscript = data.userFacingTranscript.map((t, idx) => {
+            const isLast = idx === data.userFacingTranscript.length - 1;
+            return {
+              role: t.role,
+              text: t.text,
+              paymentUrl: isLast ? data.paymentLink : null
+            };
+          });
+          setMessages(prev => [...prev, ...mappedTranscript]);
+        } else if (data.userFacingMessage) {
           setMessages(prev => [...prev, {
             role: 'model',
             text: data.userFacingMessage,
             paymentUrl: data.paymentLink || null
           }]);
-        } else if (data.transcript) {
-          const mappedTranscript = data.transcript.map(t => ({
-            role: t.role === 'ai_buyer' ? 'user' : (t.role === 'merchant' ? 'model' : t.role),
-            text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text,
-            paymentUrl: t.paymentLink || null
-          }));
-          setMessages(prev => [...prev, ...mappedTranscript]);
         }
       } catch (error) {
         setMessages(prev => [...prev, { role: 'system', text: "Error executing AI Buyer journey." }]);
@@ -281,7 +284,22 @@ function App() {
         });
         const data = await response.json();
 
-        if (data.userFacingMessage) {
+        if (data.userFacingTranscript && data.userFacingTranscript.length > 0) {
+          const mappedTranscript = data.userFacingTranscript.map((t, idx) => {
+            const isLast = idx === data.userFacingTranscript.length - 1;
+            return {
+              role: t.role,
+              text: t.text,
+              paymentUrl: isLast ? data.paymentLink : null
+            };
+          });
+          setMessages(prev => [...prev, ...mappedTranscript]);
+          
+          setVoiceState('SPEAKING');
+          voiceService.speak(data.userFacingMessage || "The purchase is ready.", () => {
+            setVoiceState('IDLE');
+          });
+        } else if (data.userFacingMessage) {
           setMessages(prev => [...prev, {
             role: 'model',
             text: data.userFacingMessage,
@@ -292,13 +310,6 @@ function App() {
           voiceService.speak(data.userFacingMessage, () => {
             setVoiceState('IDLE');
           });
-        } else if (data.transcript) {
-          const mappedTranscript = data.transcript.map(t => ({
-            role: t.role === 'ai_buyer' ? 'user' : (t.role === 'merchant' ? 'model' : t.role),
-            text: t.role === 'ai_buyer' ? `[AI Buyer] ${t.text}` : t.text
-          }));
-          setMessages(prev => [...prev, ...mappedTranscript]);
-          setVoiceState('IDLE');
         } else {
           setVoiceState('IDLE');
         }
@@ -404,6 +415,8 @@ function App() {
                         return (
                           <>
                             <div className="markdown-body">
+                              {msg.role === 'ai_buyer' && <div style={{fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.4)', marginBottom: '4px'}}>AI BUYER</div>}
+                              {msg.role === 'model' && <div style={{fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.05em', color: 'rgba(255,255,255,0.4)', marginBottom: '4px'}}>AURA</div>}
                               <ReactMarkdown>{safeText}</ReactMarkdown>
                             </div>
                             {safePaymentUrl && (
